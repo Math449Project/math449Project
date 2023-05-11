@@ -1,0 +1,312 @@
+---
+title: "The Data Driven Approach to predict the success of Bank Telemarketing"
+output: html_document
+date: "2023-05-08"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data information
+
+The data is related with direct marketing campaigns of a Portuguese banking institution. The markering campaigns were based on phone calls. Often more than one contact to the same client was required.
+
+# The Business problem I am trying to solve
+
+The customer would subscribed bank term deposit or not.
+
+# Load the library
+
+```{r,echo=FALSE,results="hide",warning=FALSE,message=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(glmnet)
+library(pls)
+library (e1071)
+library(corrplot)
+library(tree)
+library(ipred)
+library(rpart)
+library(gam)
+library(randomForest)
+library(gbm)
+library(caret)
+library(class)
+library(FNN)
+library(MASS)
+library(DMwR2)
+library(pROC)
+library(Epi)
+library(ROSE)
+library(png)
+```
+# load the dataset
+
+```{r}
+Bank=read.csv("~/Desktop/SFSU/math449Project/bank.csv",header=TRUE,sep=";")
+```
+# To see the first five row of the data
+
+```{r}
+head(Bank)
+```
+# to see the data type of Bank.csv
+
+```{r}
+str(Bank)
+```
+# correlatin between numeric predictors variable
+
+```{r}
+BankNumeric=select_if(Bank,is.integer)
+corMatrix=cor(BankNumeric)
+corrplot(corMatrix,type="upper",method="color",tl.col="black",t1.srt=45)
+```
+The correlation coefficients between all pairs of predictor variables in the model are less than 0.5. Thus, we don't need to worry about multicollinearity in this problem. 
+
+# count for non-numeric values
+
+```{r}
+cols=c("job","marital","education","default","housing","contact","month","poutcome")
+for (col in cols){
+ counts=table(Bank[,col][!is.numeric(Bank[,col])])
+ cat(paste0("Counts for ",col, " column :\n"))
+ print(counts)
+ cat("\n")
+}
+```
+# Graph the non numeric value counts for each column
+
+```{r}
+dev.new()
+for (col in 1:length(cols)){
+ counts=table(Bank[,cols[col]][!is.numeric(Bank[,cols[col]])])
+ barplot(counts,main=cols[col],xlab="Non Numeric values", ylab="Count")
+}
+```
+
+# value counts for response variable
+
+```{r}
+countsY=table(Bank$y)
+barplot(countsY,main="Frequency for response variable Y",xlab="Customer Subsribe the term Deposit",ylab="Frequency")
+```
+# compute the percentage of yes and no 
+
+```{r}
+percentageYes=countsY[2] / nrow(Bank) * 100
+percentageNo=countsY[1] / nrow(Bank) * 100
+
+cat(paste0("Percentage of subscription of term deposit: ",format(percentageYes,nsmall=2), " %"))
+cat("\n")
+cat(paste0("Percentage of no subscription of term deposit: ",format(percentageNo,nsmall=2), " %"))
+```
+Based on the graph and compute percentage, the response variable is unbalanced, with more "No" response than "Yes" which could cause biased in our prediction. This means it may accurately predict the majority class which is "No", but fail to accurately predict the minority class.
+
+I will try to make it balance by using the oversampling method
+
+```{r}
+balanceData=ovun.sample(y~.,data=Bank,method="both",N=nrow(Bank),seed=123)$data
+table(balanceData$y)
+```
+Now, the response variable is balanced. .
+# convert the response variable into binary 0 means no and 1 means yes
+
+```{r}
+balanceData$y=ifelse(balanceData$y == "yes",1,0)
+table(balanceData$y)
+```
+
+Now, the response variable is balanced. 
+
+# convert the non numeric vairables into factor
+
+```{r}
+balanceData$job=as.factor(balanceData$job)
+balanceData$marital=as.factor(balanceData$marital)
+balanceData$education=as.factor(balanceData$education)
+balanceData$default=as.factor(balanceData$default)
+balanceData$housing=as.factor(balanceData$housing)
+balanceData$loan=as.factor(balanceData$loan)
+balanceData$contact=as.factor(balanceData$contact)
+balanceData$month=as.factor(balanceData$month)
+balanceData$poutcome=as.factor(balanceData$poutcome)
+balanceData$y=as.factor(balanceData$y)
+```
+# summary of the data
+
+```{r}
+summary(Bank)
+```
+
+First, let start fitting the full model.
+
+# Fit the full model with all the predictors
+
+```{r}
+fullBank=glm(y~.,data=balanceData,family="binomial")
+summary(fullBank)
+```
+Using the full model, many predictor variables are significant to predict whether or not customer will subscribe the term deposit. This might lead to overfitting since we are using all the features.
+
+Just to make sure all the variables are really significant for prediction, I will next use feature selection to identify the most important predictors that contribute to a given outcome variable).
+
+By selecting only the most relevant predictors, we can improve the accuracy and interpretability of predictive models.
+
+In this analysis, I will use recursive elimination for feature selection
+
+# Recursive elimination
+
+```{r}
+set.seed(123)
+control=rfeControl(functions=rfFuncs,method='cv',number=10)
+rfecvModel=rfe(
+  x=balanceData[,-17],
+  y=balanceData$y,
+  sizes=c(1:4),
+  rfeControl = control,
+  method="rf")
+print(rfecvModel$optVariables)
+```
+using the recursive elimination, it gives me back all the variables from the original model. To make sure it is correct, I will then use the backward elimination for feature selection.
+
+# Backward elimination
+
+```{r}
+library(caret)
+backwardsModel=step(
+  #fullBank is a original model fit
+  object=fullBank,
+  direction = "backward",
+  scope=y~.,
+  trace=0
+)
+selectedFeatures=names(coef(backwardsModel))[-1]
+print(selectedFeatures)
+```
+From the features selection using backward elimination, I found out that variables "job","marital","education","housing","loan","contact","day","month","duration","campaign","pdays","previous","poutcome" are selected features.
+
+# forward selection
+
+```{r}
+forwardModel=step(
+  #fullBank is a original model fit
+  object=fullBank,
+  direction = "forward",
+  scope=y~.,
+  trace=0
+)
+selectedFeatures=names(coef(backwardsModel))[-1]
+print(selectedFeatures)
+```
+Backward elimination and forward selection methods choose 13 predictor variables out of 16 from the data. However, since the dataset has large number of features, they may not perform well. Therefore, I will choose recursive elimination for feature selection. Then I will compare the results with selected features.
+
+# Creating training and testing data
+
+```{r}
+train = sample(dim(balanceData)[1], dim(balanceData)[1]*0.8)
+test=-train
+balanceData.test=balanceData[test,]
+balanceData.train=balanceData[train,]
+```
+# Fit the logistic regression model with all features using cross-validation. 
+note: cross validation reduce the model over fitting. We can get more accurate results on the new data. 
+
+```{r}
+library(caret)
+fitControl <- trainControl(method = "cv", number = 10)
+#fit the modle
+balanceDataFit <- train(y ~ ., data = balanceData.train , method = "glm", trControl = fitControl,family=binomial)
+#predicitons
+predictions=predict(balanceDataFit,newdata = balanceData.test,type="prob")
+binaryPreds=ifelse(predictions[,2]>0.5,1,0)
+binaryPredsfactor=factor(binaryPreds,levels=c(0,1),ordered=TRUE)
+```
+# confusion matrix
+
+```{r}
+confusion=confusionMatrix(binaryPredsfactor,balanceData.test$y)
+print(confusion)
+```
+
+# calculate precision and accuracy
+
+```{r}
+truePositive=confusion$table[2,2]
+falsePositive=confusion$table[1,2]
+precision=truePositive/(truePositive+falsePositive)
+accuracy=confusion$overall["Accuracy"]
+cat("Precision measures how often the model correctly predicts that customers will subscribe the term deposit")
+cat("\n")
+cat("The precision score using cross validation with all predictor is" ,round(precision*100,2), "%")
+cat("\n")
+cat("Accuracy measures how often the model correctly predicts how often the model is correct, regardless of it is about predicting no subscirbe or subscribe the term deposit")
+cat("The accuracy score using cross validation with all predictor is" ,round(accuracy*100,2), "%")
+```
+
+# ROC curve
+note: roc() function expects predicted class probabilities, not class labels
+```{r}
+rocobj <- roc(balanceData.test$y, binaryPredsfactor)
+plot(rocobj,print.auc=TRUE,print.auc.x=0.5,print.auc.y=0.2)
+```
+# create a new data from the selected features(it comes from forward selection)
+
+```{r}
+selectedFeaturesCol=c("job","marital","education","housing","loan","contact","day","month","duration","campaign","pdays","previous","poutcome")
+selected_features <- c(selectedFeaturesCol, "y")
+print(selected_features)
+newBank <- balanceData%>%
+  dplyr::select(one_of(selected_features))
+```
+# Creating training and testing data with selected features
+
+```{r}
+train2 = sample(dim(newBank)[1], dim(newBank)[1]*0.8)
+test2=-train2
+newBank.test=newBank[test2,]
+newBank.train=newBank[train2,]
+```
+# Fit the logistic regression model with selected features using cross-validation. 
+
+```{r}
+library(caret)
+fitControl2 <- trainControl(method = "cv", number = 10)
+#fit the modle
+newBankFit <- train(y ~ ., data = newBank.train , method = "glm", trControl = fitControl2,family=binomial)
+#predicitons
+predictions2=predict(newBankFit,newdata = newBank.test,type="prob")
+binaryPreds2=ifelse(predictions2[,2]>0.5,1,0)
+binaryPredsfactor2=factor(binaryPreds2,levels=c(0,1),ordered=TRUE)
+```
+# confusion matrix with selected features from forward selection
+
+```{r}
+confusion2=confusionMatrix(binaryPredsfactor2,newBank.test$y)
+confusion2
+```
+# ROC curve with selected features from forward selection
+note: roc() function expects predicted class probabilities, not class labels
+```{r}
+rocobj <- roc(newBank.test$y, binaryPredsfactor2)
+plot(rocobj,print.auc=TRUE,print.auc.x=0.5,print.auc.y=0.2)
+```
+
+# calculate precision and accuracy
+
+```{r}
+truePositive2=confusion2$table[2,2]
+falsePositive2=confusion2$table[1,2]
+precision2=truePositive2/(truePositive2+falsePositive2)
+accuracy2=confusion2$overall["Accuracy"]
+cat("Precision measures how often the model correctly predicts that customers will subscribe the term deposit.")
+cat("\n")
+cat("The precision score using cross validation with the selected feature is" ,round(precision2*100,2), "%.")
+cat("\n")
+cat("\n")
+cat("Accuracy measures how often the model correctly predicts how often the model is correct, regardless of it is about predicting no subscirbe or subscribe the term deposit.")
+cat("\n")
+cat("The accuracy score using cross validation with the selected feature is" ,round(accuracy2*100,2), "%")
+```
