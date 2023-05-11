@@ -313,17 +313,3 @@ cat("Accuracy measures how often the model correctly predicts, regardless of it 
 cat("\n")
 cat("The accuracy score using cross validation with the selected feature is" ,round(accuracy2*100,2), "%")
 ```
-# fit the model using random Forest on selected features with cross validation
-
-```{r}
-random.fit=train(y~.,data=newBank.train,method="rf",trControl=fitControl2)
-predictions3=predict(random.fit,newdata = newBank.test,type="prob")
-binaryPreds3=ifelse(predictions3[,2]>0.5,1,0)
-binaryPredsfactor3=factor(binaryPreds3,levels=c(0,1),ordered=TRUE)
-```
-# confusion matrix with selected features from forward selection
-
-```{r}
-confusion3=confusionMatrix(binaryPredsfactor3,newBank.test$y)
-confusion3
-```
