@@ -8,17 +8,7 @@ date: "2023-05-08"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-### Data information
-
-The data is related with direct marketing campaigns of a Portuguese banking institution. The markering campaigns were based on phone calls. Often more than one contact to the same client was required.
-
-### The Business problem I am trying to solve
-
-* The goal of this project is to predict the customer would subscribed bank term deposit or not.
-
-* In order to achieve this objective, first we need to explore and compare which model gives the accurate and better results.
-
-* We will be examining parametric method such as logistic regression, as well as non parametric method such as KNN, to determine the most effective approach.
+# Question 1
 
 ### Load the library
 
@@ -47,21 +37,25 @@ library(ROSE)
 library(png)
 library(tibble)
 ```
+
 ### load the dataset
 
 ```{r}
 Bank=read.csv("~/Desktop/SFSU/math449Project/bank.csv",header=TRUE,sep=";")
 ```
+
 ### To see the first five row of the data
 
 ```{r}
 head(Bank)
 ```
+
 ### to see the data type of Bank.csv
 
 ```{r}
 str(Bank)
 ```
+
 ### correlatin between numeric predictors variable
 
 ```{r}
@@ -69,28 +63,8 @@ BankNumeric=select_if(Bank,is.integer)
 corMatrix=cor(BankNumeric)
 corrplot(corMatrix,type="upper",method="color",tl.col="black",t1.srt=45)
 ```
-The correlation coefficients between all pairs of predictor variables in the model are less than 0.5. Thus, we don't need to worry about multicollinearity in this problem. 
 
-### count for non-numeric values
-
-```{r}
-cols=c("job","marital","education","default","housing","contact","month","poutcome")
-for (col in cols){
- counts=table(Bank[,col][!is.numeric(Bank[,col])])
- cat(paste0("Counts for ",col, " column :\n"))
- print(counts)
- cat("\n")
-}
-```
-### Graph the non numeric value counts for each column
-
-```{r}
-dev.new()
-for (col in 1:length(cols)){
- counts=table(Bank[,cols[col]][!is.numeric(Bank[,cols[col]])])
- barplot(counts,main=cols[col],xlab="Non Numeric values", ylab="Count")
-}
-```
+The correlation coefficients between all pairs of predictor variables in the model are less than 0.5. Thus, we don't need to worry about multicollinearity in this problem.
 
 ### value counts for response variable
 
@@ -98,7 +72,8 @@ for (col in 1:length(cols)){
 countsY=table(Bank$y)
 barplot(countsY,main="Frequency for response variable Y",xlab="Customer Subsribe the term Deposit",ylab="Frequency")
 ```
-### compute the percentage of yes and no 
+
+### compute the percentage of yes and no
 
 ```{r}
 percentageYes=countsY[2] / nrow(Bank) * 100
@@ -108,7 +83,6 @@ cat(paste0("Percentage of subscription of term deposit: ",format(percentageYes,n
 cat("\n")
 cat(paste0("Percentage of no subscription of term deposit: ",format(percentageNo,nsmall=2), " %"))
 ```
-Based on the graph and compute percentage, the response variable is unbalanced, with more "No" response than "Yes" which could cause biased in our prediction. This means it may accurately predict the majority class which is "No", but fail to accurately predict the minority class.
 
 ### I will try to make it balance by using the oversampling method
 
@@ -116,15 +90,15 @@ Based on the graph and compute percentage, the response variable is unbalanced, 
 Bank=ovun.sample(y~.,data=Bank,method="both",N=nrow(Bank),seed=123)$data
 table(Bank$y)
 ```
-Now, the response variable is balanced. .
-### convert the response variable into binary 0 means no and 1 means yes
+
+Now, the response variable is balanced. . \### convert the response variable into binary 0 means no and 1 means yes
 
 ```{r}
 Bank$y=ifelse(Bank$y == "yes",1,0)
 table(Bank$y)
 ```
 
-Now, the response variable is balanced. 
+Now, the response variable is balanced.
 
 ### convert the non numeric vairables into factor
 
@@ -140,27 +114,17 @@ Bank$month=as.factor(Bank$month)
 Bank$poutcome=as.factor(Bank$poutcome)
 Bank$y=as.factor(Bank$y)
 ```
-### summary of the original data
 
-```{r}
-summary(Bank)
-```
+# Question 2
 
-First, let start fitting the full model.
-
-### Fit the full model with all the predictors without cross validation, splitting the data and feature selection
+### Fit a logistic regression model with all predictors
 
 ```{r}
 fullBank=glm(y~.,data=Bank,family="binomial")
 summary(fullBank)
 ```
-Using the full model, many predictor variables are significant to predict whether or not customer will subscribe the term deposit. This might lead to overfitting since we are using all the features to fit the model.
 
-Just to make sure all the variables are really significant for prediction, I will next use feature selection to identify the most important predictors that contribute to a given outcome variable).
-
-By selecting only the most relevant predictors, we can improve the accuracy and interpretability of predictive models.
-
-In this analysis, I will use forward and backward elimination for feature selection
+# Question 3
 
 ### Backward elimination
 
@@ -175,9 +139,8 @@ backwardsModel=step(
 selectedFeatures=names(coef(backwardsModel))[-1]
 print(selectedFeatures)
 ```
-From the features selection using backward elimination, I found out that variables "job","marital","education","housing","loan","contact","day","month","duration","campaign","pdays","previous","poutcome" are selected features.
 
-### forward selection
+### Forward selection
 
 ```{r}
 forwardModel=step(
@@ -190,11 +153,8 @@ forwardModel=step(
 selectedFeatures=names(coef(backwardsModel))[-1]
 print(selectedFeatures)
 ```
-* Backward elimination and forward selection methods choose 13 predictor variables out of 16 from the data. 
 
-* From the features selection using forward method, I found out that variables "job","marital","education","housing","loan","contact","day","month","duration","campaign","pdays","previous","poutcome" are selected features. 
-
-### create a new data from the selected features(it comes from forward selection)
+### Create a new data from the selected features(it comes from forward selection)
 
 ```{r}
 selectedFeaturesCol=c("job","marital","education","housing","loan","contact","day","month","duration","campaign","pdays","previous","poutcome")
@@ -203,6 +163,7 @@ print(selected_features)
 newBank <- Bank%>%
   dplyr::select(one_of(selected_features))
 ```
+
 ### Creating training and testing data with selected features
 
 ```{r}
@@ -211,58 +172,97 @@ test=-train
 newBank.test=newBank[test,]
 newBank.train=newBank[train,]
 ```
-# Fit the logistic regression model with selected features using cross-validation. 
+
+# Question 4
+
+### Fit the logistic regression model with selected features using k-fold cross-validation.
 
 ```{r}
 library(caret)
 fitControl2 <- trainControl(method = "cv", number = 10)
 #fit the modle
 newBankFit <- train(y ~ ., data = newBank.train , method = "glm", trControl = fitControl2,family=binomial)
+summary(newBankFit)
 #predicitons
 predictions2=predict(newBankFit,newdata = newBank.test,type="prob")
 binaryPreds2=ifelse(predictions2[,2]>0.5,1,0)
 binaryPredsfactor2=factor(binaryPreds2,levels=c(0,1),ordered=TRUE)
 ```
-### confusion matrix with selected features from forward selection
+
+# Question 5
+
+### Logistic regression confusion matrix
+
+### Define a function to create the confusion table for a given cutoff point
 
 ```{r}
-confusion2=confusionMatrix(binaryPredsfactor2,newBank.test$y)
-confusion2
+create_confusion_table <- function(cutoff) {
+  predicted_labels <-  binaryPredsfactor2
+  
+  confusion <- confusionMatrix(table(predicted_labels, newBank.test$y))
+  
+  return(confusion)
+}
 ```
-### ROC curve with selected features from forward selection
-note: roc() function expects predicted class probabilities, not class labels
-```{r}
-rocobj1 <- roc(newBank.test$y, binaryPredsfactor2)
-plot(rocobj1,print.auc=TRUE,print.auc.x=0.5,print.auc.y=0.2)
-aucScore1=auc(rocobj1)
-print(aucScore1)
-```
-AUC=0.828. It is greater than 0.5. It means the model perform better than random guessing.
 
-### calculate precision and accuracy
+### Specify the cutoff points
 
 ```{r}
-truePositive2=confusion2$table[2,2]
-falsePositive2=confusion2$table[1,2]
-precision2=truePositive2/(truePositive2+falsePositive2)
-accuracy2=confusion2$overall["Accuracy"]
-cat("Precision measures how often the model correctly predicts that customers will subscribe the term deposit.")
-cat("\n")
-cat("\n")
-cat("The precision score using cross validation with the selected feature is" ,round(precision2*100,2), "%.")
-cat("\n")
-cat("\n")
-cat("Accuracy measures how often the model correctly predicts, regardless of it is about predicting no subscirbe or subscribe the term deposit.")
-cat("\n")
-cat("The accuracy score using cross validation with the selected feature is" ,round(accuracy2*100,2), "%")
+cutoffPoints=c(0.4,0.5,0.8)
 ```
-# Next fit the model using the random Forest
 
-Advantages: More stable and robust than decision trees, can handle both continuous and categorical features, handles irrelevant features well, can capture non-linear relationships between the input features and the output, can handle large datasets.
+### create confusion tables for each cutoff point
 
-Disadvantages: Can be slow and memory-intensive, may not perform well on imbalanced datasets, may not work well with high-dimensional data.
+```{r}
+confusionTables=lapply(cutoffPoints,create_confusion_table)
+```
 
-### fit the model using random Forest on selected features with cross validation
+### Print the confusion tables logistic regression
+
+```{r}
+for (i in seq_along(confusionTables)) {
+  cat("Cutoff:", cutoffPoints[i], "\n")
+  print(confusionTables[[i]])
+  cat("\n")
+}
+```
+
+### logistic regression ROC curve
+
+```{r}
+plot(NULL, xlim = c(0, 1), ylim = c(0, 1), xlab = "False Positive Rate", ylab = "True Positive Rate")
+for (cutoff in cutoffPoints) {
+  predicted_labels <- binaryPredsfactor2 # Assign predicted labels
+  
+  roc_obj <- roc(newBank.test$y, predicted_labels)  # Create ROC curve object
+  
+  auc <- auc(roc_obj)  # Calculate AUC
+  
+  # Plot the ROC curve with label and AUC
+  plot(roc_obj, add = TRUE, col = rainbow(length(cutoffPoints))[cutoffPoints == cutoff])
+ # Determine the label position based on the cutoff point
+  if (cutoff == 0.4) {
+    text(0.5, 0.5, paste("Cutoff:", cutoff, "  AUC:", round(auc, 2)), col = rainbow(length(cutoffPoints))[cutoffPoints == cutoff])
+  } else if (cutoff == 0.5) {
+    text(0.3, 0.8, paste("Cutoff:", cutoff, "  AUC:", round(auc, 2)), col = rainbow(length(cutoffPoints))[cutoffPoints == cutoff])
+  } else if (cutoff == 0.8) {
+    text(0.7, 0.3, paste("Cutoff:", cutoff, "  AUC:", round(auc, 2)), col = rainbow(length(cutoffPoints))[cutoffPoints == cutoff])
+  }
+}
+
+# Add legend
+legend("bottomright", legend = cutoffPoints, title = "Cutoff", col = rainbow(length(cutoffPoints)), lwd = 1)
+
+# Add a diagonal reference line
+abline(a = 0, b = 1, lty = 2)
+
+# Add a title
+title(main = "ROC Curve for Different Cutoff Points")
+```
+
+# Fit the model using the random Forest
+
+### Fit the model using random Forest on selected features with cross validation
 
 ```{r}
 random.fit=train(y~.,data=newBank.train,method="rf",trControl=fitControl2)
@@ -270,46 +270,24 @@ predictions3=predict(random.fit,newdata = newBank.test,type="prob")
 binaryPreds3=ifelse(predictions3[,2]>0.5,1,0)
 binaryPredsfactor3=factor(binaryPreds3,levels=c(0,1),ordered=TRUE)
 ```
-### confusion matrix with selected features from forward selection
+
+### Random Forest confusion matrix
 
 ```{r}
 confusion3=confusionMatrix(binaryPredsfactor3,newBank.test$y)
 confusion3
 ```
-### ROC curve with selected features from forward selection
-note: roc() function expects predicted class probabilities, not class labels
-```{r}
-rocobj2 <- roc(newBank.test$y, binaryPredsfactor3)
-plot(rocobj2,print.auc=TRUE,print.auc.x=0.5,print.auc.y=0.2)
-aucScore2=auc(rocobj2)
-print(aucScore2)
-```
-AUC=0.967. It is greater than 0.5. It means the model perform better than random guessing.
-### calculate precision and accuracy
+
+### random Forest ROC curve
 
 ```{r}
-truePositive3=confusion3$table[2,2]
-falsePositive3=confusion3$table[1,2]
-precision3=truePositive3/(truePositive3+falsePositive3)
-accuracy3=confusion3$overall["Accuracy"]
-cat("Precision measures how often the model correctly predicts that customers will subscribe the term deposit.")
-cat("\n")
-cat("The precision score using cross validation with the selected feature is" ,round(precision3*100,2), "%.")
-cat("\n")
-cat("\n")
-cat("Accuracy measures how often the model correctly predicts, regardless of it is about predicting no subscirbe or subscribe the term deposit.")
-cat("\n")
-cat("The accuracy score using cross validation with the selected feature is" ,round(accuracy3*100,2), "%")
+rocobj3 <- roc(newBank.test$y, binaryPredsfactor3)
+plot(rocobj3,print.auc=TRUE,print.auc.x=0.5,print.auc.y=0.2)
+aucScore3=auc(rocobj3)
+print(aucScore3)
 ```
-Random Forest significantly increase the accuracy and auc in the new bank data. However, it is computationally expensive.
 
-# Fit the model using Decision trees. It can handle both classification and regression tasks.
-
-some advantages and disadvatages of using Decision trees.
-
-Advantages: It can handle nonlinear relationships and mixed feature types.
-
-Disadvantages: It is prone to overfitting. It is sensitivity to small variations.
+# Fit the model using Decision trees. 
 
 ### Decision trees
 
@@ -317,111 +295,46 @@ Disadvantages: It is prone to overfitting. It is sensitivity to small variations
 treeModel=train(y ~ ., data = newBank.train , method = "rpart", trControl = fitControl2)
 predictions4=predict(treeModel,newdata = newBank.test)
 ```
-### confusion matrix with selected features from forward selection
+
+### Decision trees confusion matrix
 
 ```{r}
 confusion4=confusionMatrix(data=predictions4,newBank.test$y)
 confusion4
 ```
-### ROC curve with selected features from forward selection
-note: roc() function expects predicted class probabilities, not class labels
+
+### Decision Trees ROC curve
+
 ```{r}
 response=as.numeric(newBank.test$y)-1
 predictor=as.numeric(predictions4)-1
-rocobj3 <- roc(response, predictor)
-plot(rocobj3,print.auc=TRUE,print.auc.x=0.5,print.auc.y=0.2)
-aucScore3=auc(rocobj3)
-print(aucScore3)
+rocobj4 <- roc(response, predictor)
+plot(rocobj4,print.auc=TRUE,print.auc.x=0.5,print.auc.y=0.2)
+aucScore4=auc(rocobj4)
+print(aucScore4)
 ```
-### calculate precision and accuracy
 
-```{r}
-truePositive4=confusion4$table[2,2]
-falsePositive4=confusion4$table[1,2]
-precision4=truePositive4/(truePositive4+falsePositive4)
-accuracy4=confusion4$overall["Accuracy"]
-cat("Precision measures how often the model correctly predicts that customers will subscribe the term deposit.")
-cat("\n")
-cat("The precision score using cross validation with the selected feature is" ,round(precision4*100,2), "%.")
-cat("\n")
-cat("\n")
-cat("Accuracy measures how often the model correctly predicts, regardless of it is about predicting no subscirbe or subscribe the term deposit.")
-cat("\n")
-cat("The accuracy score using cross validation with the selected feature is" ,round(accuracy4*100,2), "%")
-```
-# Next, fit the model using Naive Bayes.
-
-The only problem of using Naive Bayes is that it is assume that features are conditionally independent. 
+# Fit the model using Naive Bayes.
 
 ```{r}
 naiveBayesFit=train(y ~ ., data = newBank.train , method = "naive_bayes", trControl = fitControl2)
 predictions5=predict(naiveBayesFit,newdata = newBank.test)
 ```
-### confusion matrix with selected features from forward selection
+
+### Naive Bayes confusion matrix 
 
 ```{r}
 confusion5=confusionMatrix(data=predictions5,newBank.test$y)
 confusion5
 ```
-### ROC curve with selected features from forward selection
-note: roc() function expects predicted class probabilities, not class labels
+
+### Naive bayes ROC curve
+
 ```{r}
 response2=as.numeric(newBank.test$y)-1
 predictor2=as.numeric(predictions5)-1
-rocobj4 <- roc(response2, predictor2)
-plot(rocobj4,print.auc=TRUE,print.auc.x=0.5,print.auc.y=0.2)
-aucScore4=auc(rocobj4)
-print(aucScore4)
+rocobj5 <- roc(response2, predictor2)
+plot(rocobj5,print.auc=TRUE,print.auc.x=0.5,print.auc.y=0.2)
+aucScore5=auc(rocobj5)
+print(aucScore5)
 ```
-### calculate precision and accuracy
-
-```{r}
-truePositive5=confusion5$table[2,2]
-falsePositive5=confusion5$table[1,2]
-precision5=truePositive5/(truePositive5+falsePositive5)
-accuracy5=confusion5$overall["Accuracy"]
-cat("Precision measures how often the model correctly predicts that customers will subscribe the term deposit.")
-cat("\n")
-cat("The precision score using cross validation with the selected feature is" ,round(precision5*100,2), "%.")
-cat("\n")
-cat("\n")
-cat("Accuracy measures how often the model correctly predicts, regardless of it is about predicting no subscirbe or subscribe the term deposit.")
-cat("\n")
-cat("The accuracy score using cross validation with the selected feature is" ,round(accuracy5*100,2), "%")
-```
-
-### Create a data frame containing the model names and corresponding AUC, accuracy, and precision scores.
-
-```{r}
-modelScores=data.frame(Model=c("logistic regression", "randomForests", "decision trees","Naive Bayes"),
-                       Precision=c(round(precision2*100,2),round(precision3*100,2),round(precision4*100 ,2),round(precision5*100,2)),
-                       Accuracy=c(round(accuracy2 *100,2),round(accuracy3 *100,2),round(accuracy4*100,2),round(accuracy5*100,2)),
-                   AUC=c(round(aucScore1 *100 ,2),round(aucScore2 * 100,2),round(aucScore3 * 100 ,2),round(aucScore4*100,2)))
-```
-### Create a bar graph showing the AUC scores of logistic regression, random Forest, and decision trees
-
-```{r}
-ggplot(modelScores,aes(x=Model,y=AUC))+
-  geom_bar(stat="identity",fill="steelblue")+
-  labs(title = "AUC Scores of Classification Models",
-       x= "Model",y="AUC Score")
-```
-
-### Create a bar graph showing the Precision scores of logistic regression, random Forest, and decision trees
-
-```{r}
-ggplot(modelScores,aes(x=Model,y=Precision))+
-  geom_bar(stat="identity",fill="steelblue")+
-  labs(title = "Precision Scores of Classification Models",
-       x= "Model",y="Precision Score")
-```
-
-### Create a bar graph showing the Accuracy scores of logistic regression, random Forest, and decision trees
-
-```{r}
-ggplot(modelScores,aes(x=Model,y=Accuracy))+
-  geom_bar(stat="identity",fill="steelblue")+
-  labs(title = "Accuracy Scores of Classification Models",
-       x= "Model",y="Accuracy Score")
-```
-
